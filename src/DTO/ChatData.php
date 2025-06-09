@@ -147,6 +147,13 @@ final class ChatData extends DataTransferObject
          * @var bool|null
          */
         public ?bool $include_reasoning = false,
+
+        /**
+         * A stable identifier for your end-users. Used to help detect and prevent abuse.
+         *
+         * @var string|null
+         */
+        public ?string $user = null,
     ) {
         $this->validateXorFields($this->messages, $this->prompt);
         $this->validateXorFields($this->model, $this->models);
@@ -221,6 +228,7 @@ final class ChatData extends DataTransferObject
                 'route'              => $this->route,
                 'provider'           => $this->provider?->convertToArray(),
                 'include_reasoning'  => $this->include_reasoning,
+                'user'               => $this->user,
             ],
             fn($value) => $value !== null
         );
