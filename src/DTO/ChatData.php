@@ -143,6 +143,8 @@ final class ChatData extends DataTransferObject
         /**
          * Enable think tokens.
          * Default: false
+         * Deprecated: not included in the request.
+         * TODO: Delete with next update of the package.
          *
          * @var bool|null
          */
@@ -154,6 +156,13 @@ final class ChatData extends DataTransferObject
          * @var string|null
          */
         public ?string $user = null,
+
+        /**
+         * Reasoning parameters.
+         *
+         * @var array|null
+         */
+        public ?array $reasoning = null,
     ) {
         $this->validateXorFields($this->messages, $this->prompt);
         $this->validateXorFields($this->model, $this->models);
@@ -227,8 +236,8 @@ final class ChatData extends DataTransferObject
                 'models'             => $this->models,
                 'route'              => $this->route,
                 'provider'           => $this->provider?->convertToArray(),
-                'include_reasoning'  => $this->include_reasoning,
                 'user'               => $this->user,
+                'reasoning'          => $this->reasoning,
             ],
             fn($value) => $value !== null
         );

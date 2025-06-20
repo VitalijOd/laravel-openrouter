@@ -14,29 +14,28 @@ This Laravel package provides an easy-to-use interface for integrating **[OpenRo
 
 ## Table of Contents
 
-- [🤖 Requirements](#-requirements)
-- [🏁 Get Started](#-get-started)
-- [🧩 Configuration](#-configuration)
-- [🎨 Usage](#-usage)
-  - [Understanding ChatData DTO](#understanding-chatdata-dto)
-    - [LLM Parameters](#llm-parameters)
-    - [Function-calling](#function-calling)
-    - [Additional Optional Parameters](#additional-optional-parameters)
-    - [OpenRouter-only Parameters](#openrouter-only-parameters)
-  - [Creating a ChatData Instance](#creating-a-chatdata-instance)
-  - [Using Facade](#using-facade)
-    - [Chat Request](#chat-request)
-      - [Stream Chat Request](#stream-chat-request)
-      - [Maintaining Conversation Continuity](#maintaining-conversation-continuity)
-      - [Structured Output](#structured-output)
-    - [Cost Request](#cost-request)
-    - [Limit Request](#limit-request)
-  - [Using OpenRouterRequest Class](#using-openrouterrequest-class)
-    - [Chat Request](#chat-request-1)
-    - [Cost Request](#cost-request-1)
-    - [Limit Request](#limit-request-1)
-- [💫 Contributing](#-contributing)
-- [📜 License](#-license)
+- [Laravel OpenRouter](#laravel-openrouter)
+  - [Table of Contents](#table-of-contents)
+  - [🤖 Requirements](#-requirements)
+  - [🏁 Get Started](#-get-started)
+  - [🧩 Configuration](#-configuration)
+  - [🎨 Usage](#-usage)
+    - [Understanding ChatData DTO](#understanding-chatdata-dto)
+      - [LLM Parameters](#llm-parameters)
+      - [Function-calling](#function-calling)
+      - [Additional optional parameters](#additional-optional-parameters)
+      - [OpenRouter-only parameters](#openrouter-only-parameters)
+    - [Creating a ChatData Instance](#creating-a-chatdata-instance)
+    - [Using Facade](#using-facade)
+      - [Chat Request](#chat-request)
+      - [Cost Request](#cost-request)
+      - [Limit Request](#limit-request)
+    - [Using OpenRouterRequest Class](#using-openrouterrequest-class)
+      - [Chat Request](#chat-request-1)
+      - [Cost Request](#cost-request-1)
+      - [Limit Request](#limit-request-1)
+  - [💫 Contributing](#-contributing)
+  - [📜 License](#-license)
 
 ## 🤖 Requirements
 
@@ -112,7 +111,7 @@ The [`ChatData`](src/DTO/ChatData.php) class is used to **encapsulate the data**
 - **usage** (bool|null): A boolean indicating whether to include usage information in the response. Default is `false` because enabling usage accounting will add a few hundred milliseconds to the response as the API calculates token counts and costs.
 - **stop** (array|string|null): A value specifying the stop sequence for the chat generation.
 - **stream** (bool|null): A boolean indicating whether streaming should be enabled or not.
-- **include_reasoning** (bool|null): Whether to return the model's reasoning.
+- **reasoning** (array|null): An array for configuring reasoning parameters.
 
 #### LLM Parameters
 
@@ -175,7 +174,11 @@ $chatData = new ChatData(
     usage: true,
     stop: ['stop_token'],
     stream: true,
-    include_reasoning: true,
+    reasoning: [
+        'max_tokens' => 1000,
+        'exclude' => false,
+        'enabled' => true,
+    ],
     max_tokens: 1024,
     temperature: 0.7,
     top_p: 0.9,
