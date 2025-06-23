@@ -237,7 +237,8 @@ final class ChatData extends DataTransferObject
                 'route'              => $this->route,
                 'provider'           => $this->provider?->convertToArray(),
                 'user'               => $this->user,
-                'reasoning'          => $this->reasoning,
+                // Disable reasoning by default
+                'reasoning'          => $this->reasoning ?? ['enabled' => false],
             ],
             fn($value) => $value !== null
         );
