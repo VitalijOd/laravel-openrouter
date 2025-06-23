@@ -14,28 +14,29 @@ This Laravel package provides an easy-to-use interface for integrating **[OpenRo
 
 ## Table of Contents
 
-- [Laravel OpenRouter](#laravel-openrouter)
-  - [Table of Contents](#table-of-contents)
-  - [🤖 Requirements](#-requirements)
-  - [🏁 Get Started](#-get-started)
-  - [🧩 Configuration](#-configuration)
-  - [🎨 Usage](#-usage)
-    - [Understanding ChatData DTO](#understanding-chatdata-dto)
-      - [LLM Parameters](#llm-parameters)
-      - [Function-calling](#function-calling)
-      - [Additional optional parameters](#additional-optional-parameters)
-      - [OpenRouter-only parameters](#openrouter-only-parameters)
-    - [Creating a ChatData Instance](#creating-a-chatdata-instance)
-    - [Using Facade](#using-facade)
-      - [Chat Request](#chat-request)
-      - [Cost Request](#cost-request)
-      - [Limit Request](#limit-request)
-    - [Using OpenRouterRequest Class](#using-openrouterrequest-class)
-      - [Chat Request](#chat-request-1)
-      - [Cost Request](#cost-request-1)
-      - [Limit Request](#limit-request-1)
-  - [💫 Contributing](#-contributing)
-  - [📜 License](#-license)
+- [🤖 Requirements](#-requirements)
+- [🏁 Get Started](#-get-started)
+- [🧩 Configuration](#-configuration)
+- [🎨 Usage](#-usage)
+  - [Understanding ChatData DTO](#understanding-chatdata-dto)
+    - [LLM Parameters](#llm-parameters)
+    - [Function-calling](#function-calling)
+    - [Additional Optional Parameters](#additional-optional-parameters)
+    - [OpenRouter-only Parameters](#openrouter-only-parameters)
+  - [Creating a ChatData Instance](#creating-a-chatdata-instance)
+  - [Using Facade](#using-facade)
+    - [Chat Request](#chat-request)
+      - [Stream Chat Request](#stream-chat-request)
+      - [Maintaining Conversation Continuity](#maintaining-conversation-continuity)
+      - [Structured Output](#structured-output)
+    - [Cost Request](#cost-request)
+    - [Limit Request](#limit-request)
+  - [Using OpenRouterRequest Class](#using-openrouterrequest-class)
+    - [Chat Request](#chat-request-1)
+    - [Cost Request](#cost-request-1)
+    - [Limit Request](#limit-request-1)
+- [💫 Contributing](#-contributing)
+- [📜 License](#-license)
 
 ## 🤖 Requirements
 
@@ -230,6 +231,9 @@ $chatData = new ChatData(
 );
 
 $chatResponse = LaravelOpenRouter::chatRequest($chatData);
+
+// You can convert the response `toArray` if needed (It converts ResponseData DTO to array including the nested DTOs while filtering null values)
+$responseArray = $chatResponse->toArray();
 ```
 
 - #### Stream Chat Request
@@ -559,6 +563,9 @@ $chatResponse = LaravelOpenRouter::chatRequest($chatData);
 $generationId = $chatResponse->id; // generation id which will be passed to costRequest
 
 $costResponse = LaravelOpenRouter::costRequest($generationId);
+
+// You can convert the response `toArray` if needed (It converts CostResponseData DTO to array while filtering null values)
+$responseArray = $costResponse->toArray();
 ```
 
 #### Limit Request
@@ -567,6 +574,9 @@ To retrieve rate limit and credits left on the API key:
 
 ```php
 $limitResponse = LaravelOpenRouter::limitRequest();
+
+// You can convert the response `toArray` if needed (It converts LimitResponseData DTO to array including the nested DTOs while filtering null values)
+$responseArray = $limitResponse->toArray();
 ```
 
 ### Using OpenRouterRequest Class
@@ -575,62 +585,20 @@ You can also inject the [`OpenRouterRequest`](src/OpenRouterRequest.php) class i
 
 ```php
 public function __construct(protected OpenRouterRequest $openRouterRequest) {}
-```
 
-#### Chat Request
-
-Similarly, to send a chat request, create an instance of [`ChatData`](src/DTO/ChatData.php) and pass it to the `chatRequest` method:
-
-```php
-$content = 'Tell me a story about a rogue AI that falls in love with its creator.'; // Your desired prompt or content
-$model = 'mistralai/mistral-7b-instruct:free'; // The OpenRouter model you want to use (https://openrouter.ai/models)
-$messageData = new MessageData(
-    content: $content,
-    role   : RoleType::USER,
-);
-
-$chatData = new ChatData(
-    messages: [
-        $messageData,
-    ],
-    model: $model,
-    max_tokens: 100,
-);
-
+/*
+ * Similarly, you can use OpenRouterRequest class methods as below:
+ */
+// Chat Request
 $response = $this->openRouterRequest->chatRequest($chatData);
-```
 
-#### Cost Request
+// Stream Chat Request
+$streamResponse = $this->openRouterRequest->chatStreamRequest($chatData);
 
-Similarly, to retrieve the cost of a generation, create a `chat request` to obtain the `generationId`, then pass the `generationId` to the `costRequest` method:
-
-```php
-$content = 'Tell me a story about a rogue AI that falls in love with its creator.';
-$model = 'mistralai/mistral-7b-instruct:free'; // The OpenRouter model you want to use (https://openrouter.ai/models)
-$messageData = new MessageData(
-    content: $content,
-    role   : RoleType::USER,
-);
-
-$chatData = new ChatData(
-    messages: [
-        $messageData,
-    ],
-    model: $model,
-    max_tokens: 100,
-);
-
-$chatResponse = $this->openRouterRequest->chatRequest($chatData);
-$generationId = $chatResponse->id; // generation id which will be passed to costRequest
-
+// Cost Request
 $costResponse = $this->openRouterRequest->costRequest($generationId);
-```
 
-#### Limit Request
-
-Similarly, to retrieve rate limit and credits left on the API key:
-
-```php
+// Limit Request
 $limitResponse = $this->openRouterRequest->limitRequest();
 ```
 
