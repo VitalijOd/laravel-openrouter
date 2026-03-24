@@ -1387,7 +1387,7 @@ class OpenRouterAPITest extends TestCase
     public function it_throws_validation_exception_when_NOT_ALLOWED_value_is_sent_for_tool_choice()
     {
         /* SETUP */
-        $toolChoice = 'random'; // We have #[AllowedValues([ToolChoiceType::AUTO, ToolChoiceType::NONE])]
+        $toolChoice = 'random'; // We have #[AllowedValues([ToolChoiceType::AUTO, ToolChoiceType::NONE, ToolChoiceType::REQUIRED])]
         $this->expectException(OpenRouterValidationException::class);
 
         /* EXECUTE */
@@ -1710,5 +1710,114 @@ class OpenRouterAPITest extends TestCase
         $this->assertArrayNotHasKey('preferred_min_throughput', $array);
         $this->assertArrayNotHasKey('preferred_max_latency', $array);
         $this->assertArrayNotHasKey('max_price', $array);
+    }
+
+    #[Test]
+    public function it_makes_chat_completion_with_tool_choice_required()
+    {
+        /* SETUP */
+        $tools = [
+            new ToolCallData(
+                type: 'function',
+                function: new FunctionData(
+                    name: 'getWeather',
+                    description: 'Get the current weather for a location',
+                    parameters: [
+                        'type' => 'object',
+                        'properties' => [
+                            'location' => [
+                                'type' => 'string',
+                                'description' => 'The city name',
+                            ],
+                        ],
+                        'required' => ['location'],
+                    ],
+                ),
+            ),
+        ];
+        $chatData = new ChatData(
+            messages: [
+                new MessageData(
+                    content: 'What is the weather like in Tokyo?',
+                    role: RoleType::USER,
+                ),
+            ],
+            model: $this->model,
+            max_tokens: $this->maxTokens,
+            tool_choice: ToolChoiceType::REQUIRED,
+            tools: $tools,
+        );
+        $mockBody = $this->mockBasicBody();
+        $mockBody['choices'][0]['message']['content'] = null;
+        $mockBody['choices'][0]['message']['tool_calls'] = [
+            [
+                'id' => 'call_abc123',
+                'type' => 'function',
+                'function' => [
+                    'name' => 'getWeather',
+                    'arguments' => '{"location": "Tokyo"}',
+                ],
+            ],
+        ];
+        $mockBody['choices'][0]['finish_reason'] = 'tool_calls';
+        $this->mockOpenRouter($mockBody);
+
+        /* EXECUTE */
+        $response = $this->api->chatRequest($chatData);
+
+        /* ASSERT */
+        $this->generalTestAssertions($response);
+        $this->assertEquals('tool_calls', Arr::get($response->choices[0], 'finish_reason'));
+        $this->assertEquals('getWeather', Arr::get($response->choices[0], 'message.tool_calls.0.function.name'));
+    }
+
+    #[Test]
+    public function it_includes_tool_choice_required_in_converted_array()
+    {
+        /* SETUP */
+        $chatData = new ChatData(
+            messages: [$this->messageData],
+            model: $this->model,
+            max_tokens: $this->maxTokens,
+            tool_choice: ToolChoiceType::REQUIRED,
+        );
+
+        /* ASSERT */
+        $array = $chatData->convertToArray();
+        $this->assertEquals('required', $array['tool_choice']);
+    }
+
+    #[Test]
+    public function it_includes_prompt_cache_params_in_converted_array()
+    {
+        /* SETUP */
+        $chatData = new ChatData(
+            messages: [$this->messageData],
+            model: $this->model,
+            max_tokens: $this->maxTokens,
+            prompt_cache_key: 'my-session-123',
+            prompt_cache_retention: '24h',
+        );
+
+        /* ASSERT */
+        $array = $chatData->convertToArray();
+        $this->assertEquals('my-session-123', $array['prompt_cache_key']);
+        $this->assertEquals('24h', $array['prompt_cache_retention']);
+    }
+
+    #[Test]
+    public function it_excludes_prompt_cache_params_from_array_when_null()
+    {
+        /* SETUP */
+        $chatData = new ChatData(
+            messages: [$this->messageData],
+            model: $this->model,
+            max_tokens: $this->maxTokens,
+        );
+
+        /* ASSERT */
+        $array = $chatData->convertToArray();
+        $this->assertArrayNotHasKey('prompt_cache_key', $array);
+        $this->assertArrayNotHasKey('prompt_cache_retention', $array);
     }
 }

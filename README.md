@@ -138,7 +138,7 @@ These properties control various aspects of the generated response (more [info](
 
 Only natively suported by OpenAI models. For others, we submit a YAML-formatted string with these tools at the end of the prompt.
 
-- **tool_choice** (string|array|null): A value specifying the tool choice for function calling (OpenAI models only).
+- **tool_choice** (string|array|null): Controls which tool is called. Accepts `ToolChoiceType::AUTO`, `ToolChoiceType::NONE`, `ToolChoiceType::REQUIRED`, or a named tool as `{"type": "function", "function": {"name": "my_function"}}`.
 - **tools** (array|null): An array of [`ToolCallData`](src/DTO/ToolCallData.php) objects for function calling.
 
 #### Additional optional parameters
@@ -153,6 +153,8 @@ Only natively suported by OpenAI models. For others, we submit a YAML-formatted 
 - **models** (array|null): An array of models to automatically try if the primary model is unavailable. This field is XOR-gated with the `model` field.
 - **route** (string|null): A value specifying the route type (e.g., `RouteType::FALLBACK`).
 - **provider** (ProviderPreferencesData|null): An instance of the [`ProviderPreferencesData`](src/DTO/ProviderPreferencesData.php) DTO object for configuring provider preferences (see [Provider Preferences](#provider-preferences)).
+- **prompt_cache_key** (string|null): A stable cache key for prompt caching. Requests with the same key are routed to the same provider to maximize cache hits.
+- **prompt_cache_retention** (string|null): How long the prompt cache should be retained (e.g. `"24h"` for OpenAI).
 
 #### Provider Preferences
 
@@ -288,6 +290,8 @@ $chatData = new ChatData(
     image_config: new ImageConfigData(
         aspect_ratio: '16:9',
     ),
+    prompt_cache_key: 'my-session-123',
+    prompt_cache_retention: '24h',
 );
 ```
 

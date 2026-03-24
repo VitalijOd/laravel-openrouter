@@ -95,8 +95,8 @@ final class ChatData extends DataTransferObject
          *
          * @var string|array|null
          */
-        #[AllowedValues([ToolChoiceType::AUTO, ToolChoiceType::NONE])]
-        public string|array|null $tool_choice = null, // none|auto or ToolCallData as {"type": "function", "function": {"name": "my_function"}}
+        #[AllowedValues([ToolChoiceType::AUTO, ToolChoiceType::NONE, ToolChoiceType::REQUIRED])]
+        public string|array|null $tool_choice = null, // none|auto|required or ToolCallData as {"type": "function", "function": {"name": "my_function"}}
 
         /**
          * Tool calls (also known as function calling) allow you to give an LLM access to external tools.
@@ -197,6 +197,21 @@ final class ChatData extends DataTransferObject
          * @var ImageConfigData|null
          */
         public ?ImageConfigData $image_config = null,
+
+        /**
+         * A stable cache key for prompt caching. Requests with the same key are routed to the same provider
+         * to maximize cache hits.
+         *
+         * @var string|null
+         */
+        public ?string $prompt_cache_key = null,
+
+        /**
+         * How long the prompt cache should be retained (e.g. "24h" for OpenAI).
+         *
+         * @var string|null
+         */
+        public ?string $prompt_cache_retention = null,
     ) {
         $this->validateXorFields($this->messages, $this->prompt);
         $this->validateXorFields($this->model, $this->models);
@@ -292,7 +307,9 @@ final class ChatData extends DataTransferObject
                 'user'               => $this->user,
                 'modalities'         => $this->modalities,
                 'image_config'       => $this->image_config?->convertToArray(),
-                'reasoning'          => $this->reasoning?->convertToArray() ?? ['enabled' => false],
+                'reasoning'              => $this->reasoning?->convertToArray() ?? ['enabled' => false],
+                'prompt_cache_key'       => $this->prompt_cache_key,
+                'prompt_cache_retention' => $this->prompt_cache_retention,
             ],
             fn($value) => $value !== null
         );
