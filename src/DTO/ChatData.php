@@ -120,6 +120,22 @@ final class ChatData extends DataTransferObject
         public ?array $transforms = null,
 
         /**
+         * Plugins to use for the request e.g. for web search or pdf file input.
+         *
+         * @var PluginData[]|null
+         */
+        public ?array $plugins = null,
+
+        /**
+         * Web search options for configuring native search behavior.
+         * Only applies when using native search (OpenAI, Anthropic, Perplexity, xAI models).
+         * For more info: https://openrouter.ai/docs/guides/features/web-search
+         *
+         * @var WebSearchOptionsData|null
+         */
+        public ?WebSearchOptionsData $web_search_options = null,
+
+        /**
          * The models array, which lets you automatically try other models if the primary model's providers are down,
          * rate-limited, or refuse to reply due to content moderation required by all providers.
          *
@@ -142,11 +158,10 @@ final class ChatData extends DataTransferObject
 
         /**
          * Enable think tokens.
-         * Default: false
-         * Deprecated: not included in the request.
-         * TODO: Delete with next update of the package.
+         * Note: This parameter is the legacy parameter and will be removed in the future.
          *
          * @var bool|null
+         * @deprecated Use '$reasoning' parameter instead (it is backward compatible with the old parameter).
          */
         public ?bool $include_reasoning = false,
 
@@ -158,14 +173,42 @@ final class ChatData extends DataTransferObject
         public ?string $user = null,
 
         /**
-         * Reasoning parameters.
+         * For models that support it, the OpenRouter API can return Reasoning Tokens, also known as thinking tokens.
+         * See: https://openrouter.ai/docs/use-cases/reasoning-tokens
+         * Accepts ReasoningData DTO or a plain array (auto-converted to ReasoningData).
+         *
+         * @var ReasoningData|array|null
+         */
+        public ReasoningData|array|null $reasoning = null,
+
+        /**
+         * Modalities for the completion request.
+         * Specify both "image" and "text" to enable image generation.
+         * Example: ["image", "text"]
          *
          * @var array|null
          */
-        public ?array $reasoning = null,
+        public ?array $modalities = null,
+
+        /**
+         * Configuration for image generation.
+         * See: https://openrouter.ai/docs/docs/overview/multimodal/image-generation
+         *
+         * @var ImageConfigData|null
+         */
+        public ?ImageConfigData $image_config = null,
     ) {
         $this->validateXorFields($this->messages, $this->prompt);
         $this->validateXorFields($this->model, $this->models);
+
+        if (is_array($this->reasoning)) {
+            $this->reasoning = new ReasoningData(...$this->reasoning);
+        }
+
+        // Legacy mapping: only if no explicit reasoning provided
+        if ($this->reasoning === null && $this->include_reasoning !== null) {
+            $this->reasoning = new ReasoningData(exclude: ! $this->include_reasoning);
+        }
 
         parent::__construct(...func_get_args());
     }
@@ -233,12 +276,23 @@ final class ChatData extends DataTransferObject
                     : null,
                 'logit_bias'         => $this->logit_bias,
                 'transforms'         => $this->transforms,
+                'plugins'            => ! is_null($this->plugins)
+                    ? array_map(function ($value) {
+                        if ($value instanceof PluginData) {
+                            return $value->convertToArray();
+                        } else {
+                            return $value;
+                        }
+                    }, $this->plugins)
+                    : null,
+                'web_search_options' => $this->web_search_options?->convertToArray(),
                 'models'             => $this->models,
                 'route'              => $this->route,
                 'provider'           => $this->provider?->convertToArray(),
                 'user'               => $this->user,
-                // Disable reasoning by default
-                'reasoning'          => $this->reasoning ?? ['enabled' => false],
+                'modalities'         => $this->modalities,
+                'image_config'       => $this->image_config?->convertToArray(),
+                'reasoning'          => $this->reasoning?->convertToArray() ?? ['enabled' => false],
             ],
             fn($value) => $value !== null
         );

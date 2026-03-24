@@ -7,6 +7,7 @@ namespace MoeMizrak\LaravelOpenrouter;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Support\Arr;
 use MoeMizrak\LaravelOpenrouter\DTO\ChatData;
 use MoeMizrak\LaravelOpenrouter\DTO\CostResponseData;
 use MoeMizrak\LaravelOpenrouter\DTO\ErrorData;
@@ -62,9 +63,24 @@ final class OpenRouterRequest extends OpenRouterAPI
         );
 
         // Decode the json response
-        $response = $this->openRouterHelper->jsonDecode($response);
+        $decoded = $this->openRouterHelper->jsonDecode($response);
 
-        return $this->openRouterHelper->formChatResponse($response);
+        if ($decoded === null) {
+            return new ErrorData(
+                code: 500,
+                message: 'Empty response from OpenRouter API.',
+            );
+        }
+
+        if (Arr::get($decoded, 'error')) {
+            return new ErrorData(
+                code: Arr::get($decoded, 'error.code', 500),
+                message:Arr::get($decoded, 'error.message', 'Unknown error from OpenRouter API.'),
+                metadata: Arr::get($decoded, 'error.metadata'),
+            );
+        }
+
+        return $this->openRouterHelper->formChatResponse($decoded);
     }
 
     /**
@@ -93,7 +109,8 @@ final class OpenRouterRequest extends OpenRouterAPI
         // Options for the Guzzle request
         $options = [
             'json'    => $chatData,
-            'headers' => $headers
+            'headers' => $headers,
+            'stream' => true
         ];
 
         // Send POST request to the OpenRouter API chat completion endpoint and get the streaming response.
@@ -153,5 +170,16 @@ final class OpenRouterRequest extends OpenRouterAPI
         );
 
         return $this->openRouterHelper->formLimitResponse($response);
+    }
+
+    /**
+     * Filters streaming response string and maps it into an array of ResponseData.
+     *
+     * @param string $streamingResponse
+     * @return array
+     */
+    public function filterStreamingResponse(string $streamingResponse): array
+    {
+        return $this->openRouterHelper->filterStreamingResponse($streamingResponse);
     }
 }

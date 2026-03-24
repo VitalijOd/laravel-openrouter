@@ -2,8 +2,9 @@
 
 <br />
 
-[![Latest Version on Packagist](https://img.shields.io/badge/packagist-v2.0-blue)](https://packagist.org/packages/moe-mizrak/laravel-openrouter)
+[![Latest Version on Packagist](https://img.shields.io/badge/packagist-v2-blue)](https://packagist.org/packages/moe-mizrak/laravel-openrouter)
 [![OpenRouter Discord](https://img.shields.io/badge/OpenRouter-5865F2?logo=discord&logoColor=white)](https://discord.gg/3TbKAakhGb)
+[![Total Downloads](https://img.shields.io/packagist/dt/moe-mizrak/laravel-openrouter.svg?style=flat-square)](https://packagist.org/packages/moe-mizrak/laravel-openrouter)
 <br />
 
 <a href="https://reboosty-reboosty.vercel.app/api?repo_url=https://github.com/moe-mizrak/laravel-openrouter" target="_blank">
@@ -20,15 +21,20 @@ This Laravel package provides an easy-to-use interface for integrating **[OpenRo
 - [🎨 Usage](#-usage)
   - [Understanding ChatData DTO](#understanding-chatdata-dto)
     - [LLM Parameters](#llm-parameters)
-    - [Function-calling](#function-calling)
+    - [Tool Calling Parameters](#tool-calling-parameters)
     - [Additional Optional Parameters](#additional-optional-parameters)
     - [OpenRouter-only Parameters](#openrouter-only-parameters)
+    - [Provider Preferences](#provider-preferences)
   - [Creating a ChatData Instance](#creating-a-chatdata-instance)
   - [Using Facade](#using-facade)
     - [Chat Request](#chat-request)
       - [Stream Chat Request](#stream-chat-request)
       - [Maintaining Conversation Continuity](#maintaining-conversation-continuity)
+      - [Tool & Function Calling](#tool--function-calling)
       - [Structured Output](#structured-output)
+      - [Web Search](#web-search)
+      - [File/Document Inputs](#filedocument-inputs)
+      - [Audio Inputs](#audio-inputs)
     - [Cost Request](#cost-request)
     - [Limit Request](#limit-request)
   - [Using OpenRouterRequest Class](#using-openrouterrequest-class)
@@ -112,7 +118,8 @@ The [`ChatData`](src/DTO/ChatData.php) class is used to **encapsulate the data**
 - **usage** (bool|null): A boolean indicating whether to include usage information in the response. Default is `false` because enabling usage accounting will add a few hundred milliseconds to the response as the API calculates token counts and costs.
 - **stop** (array|string|null): A value specifying the stop sequence for the chat generation.
 - **stream** (bool|null): A boolean indicating whether streaming should be enabled or not.
-- **reasoning** (array|null): An array for configuring reasoning parameters.
+- **include_reasoning** (bool|null): Whether to return the model's reasoning (Note: this parameter is **deprecated**, use `reasoning` parameter instead. For backward compatibility, package still supports the `include_reasoning` parameter)
+- **reasoning** (ReasoningData|null): An instance of the [`ReasoningData`](src/DTO/ReasoningData.php) class for reasoning configuration. It provides a transparent look into the reasoning steps taken by a model.
 
 #### LLM Parameters
 
@@ -127,7 +134,7 @@ These properties control various aspects of the generated response (more [info](
 - **repetition_penalty** (float|null): A value between 0 and 2 for penalizing repetitive tokens.
 - **seed** (int|null): A value for deterministic sampling (OpenAI models only, in beta).
 
-#### Function-calling
+#### Tool-calling Parameters
 
 Only natively suported by OpenAI models. For others, we submit a YAML-formatted string with these tools at the end of the prompt.
 
@@ -141,9 +148,67 @@ Only natively suported by OpenAI models. For others, we submit a YAML-formatted 
 #### OpenRouter-only parameters
 
 - **transforms** (array|null): An array for configuring prompt transforms.
+- **plugins** (array|null): An array of [`PluginData`](src/DTO/PluginData.php) objects for configuring plugins such as `web search` or `file parsing`.
+- **web_search_options** (WebSearchOptionsData|null): An instance of the [`WebSearchOptionsData`](src/DTO/WebSearchOptionsData.php) DTO object for configuring web search (e.g. `search_context_size: SearchContextSizeType::LOW`).
 - **models** (array|null): An array of models to automatically try if the primary model is unavailable. This field is XOR-gated with the `model` field.
 - **route** (string|null): A value specifying the route type (e.g., `RouteType::FALLBACK`).
-- **provider** (ProviderPreferencesData|null): An instance of the [`ProviderPreferencesData`](src/DTO/ProviderPreferencesData.php) DTO object for configuring provider preferences.
+- **provider** (ProviderPreferencesData|null): An instance of the [`ProviderPreferencesData`](src/DTO/ProviderPreferencesData.php) DTO object for configuring provider preferences (see [Provider Preferences](#provider-preferences)).
+
+#### Provider Preferences
+
+The [`ProviderPreferencesData`](src/DTO/ProviderPreferencesData.php) DTO allows fine-grained control over provider routing. For more details, see [OpenRouter Provider Selection](https://openrouter.ai/docs/guides/routing/provider-selection).
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `allow_fallbacks` | `bool\|null` | Whether to allow backup providers when the primary is unavailable (default: `true`). |
+| `require_parameters` | `bool\|null` | Only use providers that support all parameters in your request. |
+| `data_collection` | `string\|null` | `DataCollectionType::ALLOW` (default) or `DataCollectionType::DENY`. |
+| `order` | `array\|null` | Ordered list of provider slugs to prefer. |
+| `zdr` | `bool\|null` | Restrict routing to only Zero Data Retention endpoints. |
+| `enforce_distillable_text` | `bool\|null` | Restrict routing to only models that allow text distillation. |
+| `only` | `array\|null` | List of provider slugs to allow for this request. |
+| `ignore` | `array\|null` | List of provider slugs to skip for this request. |
+| `quantizations` | `array\|null` | Filter by quantization levels (see `QuantizationType`). |
+| `sort` | `string\|ProviderSortData\|null` | Sort providers by `"price"`, `"throughput"`, or `"latency"`. Can also be a `ProviderSortData` object with `by` and `partition` fields. |
+| `preferred_min_throughput` | `float\|PercentileData\|null` | Preferred minimum throughput (tokens/sec). Can be a number or `PercentileData` with percentile cutoffs (`p50`, `p75`, `p90`, `p99`). |
+| `preferred_max_latency` | `float\|PercentileData\|null` | Preferred maximum latency (seconds). Can be a number or `PercentileData` with percentile cutoffs. |
+| `max_price` | `MaxPriceData\|null` | Maximum acceptable pricing with `prompt`, `completion`, `request`, and `image` fields (in USD). |
+
+**Example with advanced provider preferences:**
+
+```php
+$provider = new ProviderPreferencesData(
+    allow_fallbacks: true,
+    require_parameters: true,
+    data_collection: DataCollectionType::DENY,
+    only: ['openai', 'anthropic'],
+    quantizations: [QuantizationType::FP16, QuantizationType::BF16],
+    sort: new ProviderSortData(
+        by: ProviderSortType::PRICE,
+        partition: true,
+    ),
+    preferred_min_throughput: new PercentileData(
+        p50: 100.0,
+        p90: 50.0,
+    ),
+    preferred_max_latency: 2.5,
+    max_price: new MaxPriceData(
+        prompt: 0.001,
+        completion: 0.002,
+    ),
+);
+
+$chatData = new ChatData(
+    messages: [
+        new MessageData(
+            role: RoleType::USER,
+            content: 'Hello!',
+        ),
+    ],
+    model: 'openai/gpt-4o',
+    provider: $provider,
+);
+```
 
 ### Creating a ChatData Instance
 
@@ -175,11 +240,10 @@ $chatData = new ChatData(
     usage: true,
     stop: ['stop_token'],
     stream: true,
-    reasoning: [
-        'max_tokens' => 1000,
-        'exclude' => false,
-        'enabled' => true,
-    ],
+    reasoning: new ReasoningData(
+        effort: EffortType::HIGH,
+        exclude: false,
+    ),
     max_tokens: 1024,
     temperature: 0.7,
     top_p: 0.9,
@@ -196,12 +260,33 @@ $chatData = new ChatData(
         '50256' => -100,
     ],
     transforms: ['middle-out'],
+    plugins: [
+        new PluginData(
+            id: 'web',
+            max_results: 3,
+            engine: 'native',
+        ),
+    ],
+    web_search_options: new WebSearchOptionsData(
+        search_context_size: SearchContextSizeType::MEDIUM,
+    ),
     models: ['model1', 'model2'],
     route: RouteType::FALLBACK,
     provider: new ProviderPreferencesData(
         allow_fallbacks: true,
         require_parameters: true,
         data_collection: DataCollectionType::ALLOW,
+        ignore: ['anthropic'],
+        quantizations: [QuantizationType::FP16, QuantizationType::BF16],
+        sort: ProviderSortType::PRICE,
+        max_price: new MaxPriceData(
+            prompt: 0.001,
+            completion: 0.002,
+        ),
+    ),
+    modalities: ['image', 'text'],
+    image_config: new ImageConfigData(
+        aspect_ratio: '16:9',
     ),
 );
 ```
@@ -284,6 +369,56 @@ while (! $stream->eof()) {
 You do **not** need to specify `'stream' = true` in ChatData since `chatStreamRequest` does it for you.
 
 <details>
+<summary>Streaming usage example:</summary>
+
+```php
+Route::get('/test/stream', function () {
+    $content = 'Tell me a story about a rogue AI that falls in love with its creator.';
+    $model = 'deepseek/deepseek-chat-v3.1';
+    
+    $messageData = new MessageData(
+        content: $content,
+        role: RoleType::USER,
+    );
+    
+    $chatData = new ChatData(
+        messages: [$messageData],
+        model: $model,
+        max_tokens: 1000,
+    );
+    
+    return response()->stream(function () use ($chatData) {
+        $promise = LaravelOpenRouter::chatStreamRequest($chatData);
+        $stream = $promise->wait();
+        
+        while (!$stream->eof()) {
+            $rawResponse = $stream->read(1024);
+            
+            // 1) Print raw streamed response as it becomes available:
+            echo $rawResponse;
+            
+            /*
+             * 2) Optionally you can use filterStreamingResponse to filter raw streamed response, and map it into array of responseData DTO same as chatRequest response format.
+             */
+            $response = LaravelOpenRouter::filterStreamingResponse($rawResponse);
+            
+            foreach ($response as $responseData) {
+                // Process each responseData as needed
+                echo json_encode($responseData->toArray()) . PHP_EOL;
+            }
+            
+            flush();
+        }
+    }, 200, [
+        'Content-Type' => 'text/plain; charset=utf-8',
+    ]);
+});
+```
+
+</details>
+
+<details>
+<summary>Sample rawResponse:</summary>
 
 This is the expected sample rawResponse (raw response returned from OpenRouter stream chunk) `$rawResponse`:
 
@@ -376,7 +511,7 @@ This is the sample response after filterStreamingResponse:
         usage: null
     ),
     ...
-    new ResponseData(
+    ResponseData(
         id: 'gen-QcWgjEtiEDNHgomV2jjoQpCZlkRZ',
         model: 'mistralai/mistral-7b-instruct:free',
         object: 'chat.completion.chunk',
@@ -395,7 +530,20 @@ This is the sample response after filterStreamingResponse:
             prompt_tokens: 23,
             completion_tokens: 100,
             total_tokens: 123,
-            cost: 0.00000114
+            cost: 0.00000114,
+            prompt_tokens_details: new PromptTokensDetailsData(
+                cached_tokens: 10,
+                cache_write_tokens: 15,
+                audio_tokens: 0,
+                video_tokens: 0,
+            ),
+            completion_tokens_details: new CompletionTokensDetailsData(
+                reasoning_tokens: 30,
+                audio_tokens: 0,
+                image_tokens: 0,
+                accepted_prediction_tokens: 90,
+                rejected_prediction_tokens: 0,
+            ),
         ),
     ),
 ]
@@ -456,6 +604,115 @@ Expected response:
 $content = Arr::get($response->choices[0], 'message.content');
 // content = You are Moe, a fictional character and AI Necromancer, as per the context of the conversation we've established. In reality, you are the user interacting with me, an assistant designed to help answer questions and engage in friendly conversation.
 ```
+
+- #### Tool & Function Calling
+    (Please also refer to [OpenRouter Document Function Calling](https://openrouter.ai/docs/guides/features/tool-calling) for more details and [models supporting tool calling](https://openrouter.ai/models?supported_parameters=tools))
+
+Tool calls (also known as function calls) give an LLM access to external tools. The LLM does not call the tools directly. Instead, it suggests the tool to call.
+
+>[!NOTE]
+> The user then calls the tool separately and provides the results back to the LLM.
+> Finally, the LLM formats the response into an answer to the user’s original question.
+
+This is an example of how to use tool calling with OpenRouter:
+
+```php
+// Define the tool using ToolCallData and FunctionData
+$tools = [
+    new ToolCallData(
+        type: 'function',
+        function: new FunctionData(
+            name: 'getWeather',
+            description: 'Get the current weather for a location',
+            parameters: [
+                'type' => 'object',
+                'properties' => [
+                    'location' => [
+                        'type' => 'string',
+                        'description' => 'The city name',
+                    ],
+                ],
+                'required' => ['location'],
+            ],
+        ),
+    ),
+];
+
+// Create chat request with tools
+$chatData = new ChatData(
+    messages: [
+        new MessageData(
+            role: RoleType::USER,
+            content: 'What is the weather like in Tokyo?',
+        ),
+    ],
+    model: 'openai/gpt-4o-mini',
+    tools: $tools,
+    tool_choice: 'auto',
+);
+
+// Send request, if tool call is suggested by LLM, call the tool and provide the result back to LLM as below
+$response = LaravelOpenRouter::chatRequest($chatData);
+
+// If LLM suggested tool call then extract the tool call returned from LLM
+$toolCall = $response['choices'][0]['message']['tool_calls'][0] ?? null;
+// the model/LLM generated ID
+$toolCallId = $toolCall['id']; // e.g. "call_7F3kP9"
+
+// Sample tool result assuming you called the tool and got the result
+$toolResult = [
+    'temperature' => '22°C',
+    'condition'   => 'Sunny',
+];
+
+// Provide tool result back to LLM:
+
+// The original user message
+$userMessage = new MessageData(
+    role: RoleType::USER,
+    content: 'What is the weather like in Tokyo?',
+);
+
+// Tool call assistant message with tool call ID
+$assistantToolCallMessage = new MessageData(
+    role: RoleType::ASSISTANT,
+    tool_calls: [
+        new ToolCallData(
+            id: $toolCallId,
+            type: 'function',
+            function: new FunctionCallData(
+                name: $toolCall['function']['name'],
+                arguments: $toolCall['function']['arguments'],
+            ),
+        ),
+    ],
+);
+
+// Tool response message with tool result and tool call ID
+$toolResponseMessage = new MessageData(
+    role: RoleType::TOOL,
+    tool_call_id: $toolCallId,
+    content: json_encode($toolResult),
+);
+
+$chatDataWithToolResult = new ChatData(
+    messages: [
+        $userMessage,
+        $assistantToolCallMessage,
+        $toolResponseMessage,
+    ],
+    model: 'openai/gpt-4o-mini',
+);
+
+// Send request with tool result
+$finalResponse = LaravelOpenRouter::chatRequest($chatDataWithToolResult);
+```
+
+> Basically it follows these steps:
+> 1. Define the tools and send the initial chat request including the tools and tool_choice optional parameters.
+> 2. If the LLM suggests a tool call, extract the tool call information from the response and make the actual tool call separately.
+> 3. Provide the tool result back to the LLM by creating a new chat request that includes the original user message, the assistant's tool call message, and the tool response message including the tool_call_id which is the ID generated by the model/LLM for the tool call.
+> 4. Send the new chat request to get the final response from the LLM.
 
 - #### Structured Output
 
@@ -539,6 +796,185 @@ $chatData = new ChatData(
 > [!TIP]
 > You can also use **prompt engineering** to obtain structured output and control the format of responses.
 
+- #### Web Search
+    (Please also refer to [OpenRouter Document Web Search](https://openrouter.ai/docs/guides/features/plugins/web-search) for more details)
+
+**Web Search** feature works on any model on OpenRouter.
+
+You can incorporate relevant web search results for any model on OpenRouter by activating and customizing the web plugin, or by appending :online to the model slug.
+ e.g., `model: "openai/gpt-4o:online"` or `model: "openai/gpt-oss-20b:free:online"`.
+```php
+$chatData = new ChatData(
+    messages: [
+        new MessageData(
+            role: RoleType::USER,
+            content: 'What are the latest developments in AI?',
+        ),
+    ],
+    model: 'openai/gpt-4o:online',
+    web_search_options: new WebSearchOptionsData(
+        search_context_size: SearchContextSizeType::HIGH, // Optional: low, medium, high
+    ),
+);
+```
+
+`web_search_options` parameter in ChatData is optional, where you can customize the web search behavior
+as `search_context_size` can be set to `low`, `medium`, or `high` depending on how much web search context you want to include in the response.
+- `SearchContextSizeType::LOW` is for minimal search context, suitable for basic queries.
+- `SearchContextSizeType::MEDIUM` is for moderate amount of web search context.
+- `SearchContextSizeType::HIGH` is for extensive web search context.
+ 
+`:online` is a shortcut for using the web plugin, and is exactly equivalent to:
+```php
+$chatData = new ChatData(
+    messages: [
+        new MessageData(
+            role: RoleType::USER,
+            content: 'What are the latest developments in AI?',
+        ),
+    ],
+    model: 'openai/gpt-4o',
+    plugins: [
+        new PluginData(
+            id: 'web',
+            max_results: 5, // Optional: number of search results to retrieve
+            engine: 'undefined', // Optional: "native", "exa", or "undefined"
+        ),
+    ],
+    web_search_options: new WebSearchOptionsData(
+        search_context_size: SearchContextSizeType::MEDIUM, // Optional: low, medium, high
+    ),
+);
+```
+
+`engine` parameter in PluginData is optional, where you can specify the web search engine to be used:
+- `native`: Always uses the model provider’s built-in web search capabilities
+- `exa`: Uses Exa’s search API for web results
+- `undefined`: Uses native search if available for the provider, otherwise falls back to Exa
+
+And here is how **annotations** are included in the response when using **web search** where annotations contains `type`: `url_citation` and `url_citation`: {`url`, `title`, `content`, `start_index`, `end_index`}:
+
+```php
+$response = LaravelOpenRouter::chatRequest($chatData);
+
+$annotations = Arr::get($response->choices[0], 'message.annotations', []);
+```
+
+- #### File/Document Inputs
+
+  (Please also refer to [OpenRouter Document File Inputs](https://openrouter.ai/docs/guides/overview/multimodal/pdfs) for more details)
+
+You can provide file input by using the `FileContentData` DTO class as following:
+```php
+$model = 'anthropic/claude-3.5-sonnet';
+
+// Plugin configuration for file parsing, optional
+$plugins = [
+    new PluginData(
+        id: 'file-parser',
+        pdf: [
+            'engine' => 'pdf-text', // Supported engines: pdf-text, mistral-ocr and native
+        ],
+    ),
+];
+
+// For the publicly accessible PDFs
+$fileContentData = new FileContentData(
+    type: FileContentData::ALLOWED_TYPE,
+    file: new FileUrlData(
+        file_data: 'https://example.com/report.pdf',
+        filename: 'quarterly-report.pdf',
+    ),
+);
+
+$textContentData = new TextContentData(
+    type: TextContentData::ALLOWED_TYPE,
+    text: 'Please summarize this document.',
+);
+
+$messageData = new MessageData(
+    content: [
+        $textContentData,
+        $fileContentData,
+    ],
+    role: RoleType::USER,
+);
+
+$chatData = new ChatData(
+    messages: [$messageData],
+    model: $model,
+    plugins: $plugins,
+);
+
+$response = LaravelOpenRouter::chatRequest($chatData);
+```
+
+> [!NOTE]
+> - `plugins` parameter in ChatData is optional.
+> - If you don’t explicitly specify an **engine**, OpenRouter will default first to the model’s native file processing capabilities, and if that’s not available, it will use the "mistral-ocr" engine.
+
+*Using base64-encoded files*: 
+```php
+$base64Data = base64_encode(file_get_contents('/path/to/document.pdf'));
+
+$fileContentData = new FileContentData(
+    type: FileContentData::ALLOWED_TYPE,
+    file: new FileUrlData(
+        file_data: "data:application/pdf;base64,{$base64Data}",
+        filename: 'document.pdf',
+    ),
+);
+```
+
+> [!TIP]
+> - **File input** feature works on any model on OpenRouter.
+> - The `filename` parameter is optional but recommended for context.
+
+- ####  Audio Inputs
+  (Please also refer to [OpenRouter Document Audio Inputs](https://openrouter.ai/docs/features/multimodal/audio) for models supporting audio inputs, also for more details)
+
+Audio input is supported by some models in OpenRouter. You can provide audio input by using the `AudioContentData` DTO class as following:
+
+```php
+$model = 'mistralai/voxtral-small-24b-2507'; // Audio input supported models: https://openrouter.ai/models?fmt=cards&input_modalities=audio
+$data = base64_encode('path/of/audio/file.mp3'); // Base64-encoded audio data
+
+$audioContentData = new AudioContentData(
+    type: AudioContentData::ALLOWED_TYPE, // it can only take input_audio for audio content
+    input_audio: new InputAudioData(
+        data: $data,
+        format: AudioFormatType::MP3, // Supported formats: mp3, wav
+    ),
+);
+
+$textContentData = new TextContentData(
+    type: TextContentData::ALLOWED_TYPE,
+    text: 'Please transcribe this audio file.',
+);
+
+$messageData = new MessageData(
+    content: [
+        $textContentData,
+        $audioContentData,
+    ],
+    role: RoleType::USER,
+);
+
+$chatData = new ChatData(
+    messages: [
+        $messageData,
+    ],
+    model: $model,
+);
+
+$response = LaravelOpenRouter::chatRequest($chatData);
+```
+
+> [!NOTE]
+> Only `mp3` and `wav` formats are supported for audio inputs.
+> 
+> And make sure to provide valid `base64-encoded` audio data.
+
 #### Cost Request
 
 To retrieve the cost of a generation, first make a `chat request` and obtain the `generationId`. Then, pass the generationId to the `costRequest` method:
@@ -605,6 +1041,8 @@ $limitResponse = $this->openRouterRequest->limitRequest();
 ## 💫 Contributing
 
 > **We welcome contributions!** If you'd like to improve this package, simply create a pull request with your changes. Your efforts help enhance its functionality and documentation.
+
+Please read our **[Contributing Guide](CONTRIBUTING.md)** for details on our development process, commit conventions, and how to submit pull requests.
 
 ## 📜 License
 

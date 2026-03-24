@@ -6,22 +6,42 @@ use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Psr7\Response;
 use Illuminate\Support\Arr;
 use Mockery\MockInterface;
+use MoeMizrak\LaravelOpenrouter\DTO\AudioContentData;
 use MoeMizrak\LaravelOpenrouter\DTO\ChatData;
+use MoeMizrak\LaravelOpenrouter\DTO\CompletionTokensDetailsData;
 use MoeMizrak\LaravelOpenrouter\DTO\CostResponseData;
+use MoeMizrak\LaravelOpenrouter\DTO\ErrorData;
+use MoeMizrak\LaravelOpenrouter\DTO\FileContentData;
+use MoeMizrak\LaravelOpenrouter\DTO\FileUrlData;
+use MoeMizrak\LaravelOpenrouter\DTO\FunctionData;
+use MoeMizrak\LaravelOpenrouter\DTO\ImageConfigData;
 use MoeMizrak\LaravelOpenrouter\DTO\ImageContentPartData;
 use MoeMizrak\LaravelOpenrouter\DTO\ImageUrlData;
+use MoeMizrak\LaravelOpenrouter\DTO\InputAudioData;
 use MoeMizrak\LaravelOpenrouter\DTO\LimitResponseData;
+use MoeMizrak\LaravelOpenrouter\DTO\MaxPriceData;
 use MoeMizrak\LaravelOpenrouter\DTO\MessageData;
+use MoeMizrak\LaravelOpenrouter\DTO\PercentileData;
+use MoeMizrak\LaravelOpenrouter\DTO\PluginData;
+use MoeMizrak\LaravelOpenrouter\DTO\PromptTokensDetailsData;
 use MoeMizrak\LaravelOpenrouter\DTO\ProviderPreferencesData;
+use MoeMizrak\LaravelOpenrouter\DTO\ProviderSortData;
+use MoeMizrak\LaravelOpenrouter\DTO\ReasoningData;
 use MoeMizrak\LaravelOpenrouter\DTO\ResponseData;
 use MoeMizrak\LaravelOpenrouter\DTO\ResponseFormatData;
 use MoeMizrak\LaravelOpenrouter\DTO\TextContentData;
+use MoeMizrak\LaravelOpenrouter\DTO\ToolCallData;
 use MoeMizrak\LaravelOpenrouter\Exceptions\OpenRouterValidationException;
 use MoeMizrak\LaravelOpenrouter\Facades\LaravelOpenRouter;
 use MoeMizrak\LaravelOpenrouter\OpenRouterRequest;
+use MoeMizrak\LaravelOpenrouter\Types\AudioFormatType;
 use MoeMizrak\LaravelOpenrouter\Types\DataCollectionType;
+use MoeMizrak\LaravelOpenrouter\Types\EffortType;
+use MoeMizrak\LaravelOpenrouter\Types\ProviderSortType;
+use MoeMizrak\LaravelOpenrouter\Types\QuantizationType;
 use MoeMizrak\LaravelOpenrouter\Types\RoleType;
 use MoeMizrak\LaravelOpenrouter\Types\RouteType;
+use MoeMizrak\LaravelOpenrouter\Types\ToolChoiceType;
 use PHPUnit\Framework\Attributes\Test;
 
 class OpenRouterAPITest extends TestCase
@@ -76,6 +96,63 @@ class OpenRouterAPITest extends TestCase
                 'completion_tokens' => 100,
                 'total_tokens' => 123,
                 'cost' => 0.00000114,
+                'prompt_tokens_details' => [
+                    'cached_tokens' => 10,
+                    'cache_write_tokens' => 15,
+                    'audio_tokens' => 0,
+                    'video_tokens' => 0,
+                ],
+                'completion_tokens_details' => [
+                    'reasoning_tokens' => 30,
+                    'audio_tokens' => 0,
+                    'image_tokens' => 0,
+                    'accepted_prediction_tokens' => 90,
+                    'rejected_prediction_tokens' => 0,
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array
+     */
+    private function mockReasoning(): array
+    {
+        return [
+            'id' => 'gen-QcWgjEtiEDNHgomV2jjoQpCZlkRZ',
+            'provider' => 'HuggingFace',
+            'model' => $this->model,
+            'object' => 'chat.completion',
+            'created' => 1718888436,
+            'choices' => [
+                [
+                    'index' => 0,
+                    'message' => [
+                        'role' => RoleType::ASSISTANT,
+                        'content' => 'Some random content',
+                        'reasoning' => 'The reasoning behind the answer is...',
+                    ],
+                    'finish_reason' => 'stop',
+                ],
+            ],
+            'usage' => [
+                'prompt_tokens' => 23,
+                'completion_tokens' => 100,
+                'total_tokens' => 123,
+                'cost' => 0.00000114,
+                'prompt_tokens_details' => [
+                    'cached_tokens' => 10,
+                    'cache_write_tokens' => 15,
+                    'audio_tokens' => 0,
+                    'video_tokens' => 0,
+                ],
+                'completion_tokens_details' => [
+                    'reasoning_tokens' => 30,
+                    'audio_tokens' => 0,
+                    'image_tokens' => 0,
+                    'accepted_prediction_tokens' => 90,
+                    'rejected_prediction_tokens' => 0,
+                ],
             ],
         ];
     }
@@ -164,6 +241,12 @@ class OpenRouterAPITest extends TestCase
         $this->assertNotNull($response->usage->completion_tokens);
         $this->assertNotNull($response->usage->total_tokens);
         $this->assertNotNull($response->usage->cost);
+        // Validate prompt_tokens_details nested DTO
+        $this->assertInstanceOf(PromptTokensDetailsData::class, $response->usage->prompt_tokens_details);
+        $this->assertNotNull($response->usage->prompt_tokens_details->cached_tokens);
+        // Validate completion_tokens_details nested DTO
+        $this->assertInstanceOf(CompletionTokensDetailsData::class, $response->usage->completion_tokens_details);
+        $this->assertNotNull($response->usage->completion_tokens_details->reasoning_tokens);
         $this->assertNotNull($response->choices);
         $this->assertNotNull(Arr::get($response->choices[0], 'finish_reason'));
     }
@@ -188,6 +271,71 @@ class OpenRouterAPITest extends TestCase
         $this->generalTestAssertions($response);
         $this->assertEquals(RoleType::ASSISTANT, Arr::get($response->choices[0], 'message.role'));
         $this->assertNotNull(Arr::get($response->choices[0], 'message.content'));
+    }
+
+    #[Test]
+    public function it_makes_a_basic_chat_completion_open_route_api_request_with_reasoning_param()
+    {
+        /* SETUP */
+        $chatData = new ChatData(
+            messages: [
+                $this->messageData,
+            ],
+            model: $this->model,
+            max_tokens: $this->maxTokens,
+            reasoning: new ReasoningData(
+                effort: EffortType::HIGH,
+                exclude: false, // Reasoning should not be excluded
+            ),
+        );
+        $this->mockOpenRouter($this->mockReasoning());
+
+        /* EXECUTE */
+        $response = $this->api->chatRequest($chatData);
+        /* ASSERT */
+        $this->generalTestAssertions($response);
+        $this->assertNotNull(Arr::get($response->choices[0], 'message.reasoning'));
+    }
+
+    #[Test]
+    public function it_tests_chat_data_with_legacy_include_reasoning_param_if_mapping_to_reasoning()
+    {
+        /* SETUP */
+        // Legacy parameter `include_reasoning` is set to true, so it should be mapped to reasoning
+        $firstChatData = new ChatData(
+            messages: [
+                $this->messageData,
+            ],
+            model: $this->model,
+            max_tokens: $this->maxTokens,
+            include_reasoning: true, // Legacy parameter
+        );
+        // neither include_reasoning nor reasoning is set, so it should not be mapped to reasoning
+        $secondChatData = new ChatData(
+            messages: [
+                $this->messageData,
+            ],
+            model: $this->model,
+            max_tokens: $this->maxTokens,
+        );
+        // reasoning is set, so it should ignore legacy parameter
+        $thirdChatData = new ChatData(
+            messages: [
+                $this->messageData,
+            ],
+            model: $this->model,
+            max_tokens: $this->maxTokens,
+            include_reasoning: false,
+            reasoning: new ReasoningData(
+                effort: EffortType::HIGH,
+                exclude: false,
+            ),
+        );
+
+        /* ASSERT */
+        $this->assertFalse($firstChatData->reasoning->exclude);
+        $this->assertTrue($secondChatData->reasoning->exclude);
+        $this->assertFalse($thirdChatData->reasoning->exclude);
     }
 
     #[Test]
@@ -441,6 +589,210 @@ class OpenRouterAPITest extends TestCase
     }
 
     #[Test]
+    public function it_successfully_makes_web_search_in_the_open_route_api_request()
+    {
+        /* SETUP */
+        $plugins = [
+            new PluginData(
+                id: 'web',
+                max_results: 3,
+            ),
+        ];
+        $chatData = new ChatData(
+            messages: [
+                new MessageData(
+                    content: 'What are the latest developments in AI?',
+                    role: RoleType::USER,
+                ),
+            ],
+            model: $this->model,
+            plugins: $plugins,
+        );
+        $mockBody = $this->mockBasicBody();
+        $mockBody['choices'][0]['message']['annotations'] = [
+            [
+                'type' => 'url_citation',
+                'url_citation' => [
+                    'url' => 'https://example.com/ai-developments',
+                    'title' => 'Latest Developments in AI',
+                    'content' => 'This article discusses the latest advancements in artificial intelligence...',
+                ],
+            ],
+        ];
+        $this->mockOpenRouter($mockBody);
+
+        /* EXECUTE */
+        $response = LaravelOpenRouter::chatRequest($chatData);
+
+        /* ASSERT */
+        $this->generalTestAssertions($response);
+        $this->assertNotNull(Arr::get($response->choices[0], 'message.annotations'));
+        $this->assertEquals('url_citation', Arr::get($response->choices[0], 'message.annotations.0.type'));
+        $this->assertNotNull(Arr::get($response->choices[0], 'message.annotations.0.url_citation.url'));
+        $this->assertNotNull(Arr::get($response->choices[0], 'message.annotations.0.url_citation.title'));
+        $this->assertNotNull(Arr::get($response->choices[0], 'message.annotations.0.url_citation.content'));
+    }
+
+    #[Test]
+    public function it_successfully_makes_web_search_with_online_model_in_the_open_route_api_request()
+    {
+        /* SETUP */
+        $chatData = new ChatData(
+            messages: [
+                new MessageData(
+                    content: 'What are the latest developments in AI?',
+                    role: RoleType::USER,
+                ),
+            ],
+            model: 'mistralai/mistral-7b-instruct:free:online',
+        );
+        $mockBody = $this->mockBasicBody();
+        $mockBody['choices'][0]['message']['annotations'] = [
+            [
+                'type' => 'url_citation',
+                'url_citation' => [
+                    'url' => 'https://example.com/ai-developments',
+                    'title' => 'Latest Developments in AI',
+                    'content' => 'This article discusses the latest advancements in artificial intelligence...',
+                ],
+            ],
+        ];
+        $this->mockOpenRouter($mockBody);
+
+        /* EXECUTE */
+        $response = LaravelOpenRouter::chatRequest($chatData);
+
+        /* ASSERT */
+        $this->generalTestAssertions($response);
+        $this->assertNotNull(Arr::get($response->choices[0], 'message.annotations'));
+        $this->assertEquals('url_citation', Arr::get($response->choices[0], 'message.annotations.0.type'));
+        $this->assertNotNull(Arr::get($response->choices[0], 'message.annotations.0.url_citation.url'));
+        $this->assertNotNull(Arr::get($response->choices[0], 'message.annotations.0.url_citation.title'));
+        $this->assertNotNull(Arr::get($response->choices[0], 'message.annotations.0.url_citation.content'));
+    }
+
+    #[Test]
+    public function it_successfully_sends_file_content_in_messages_in_the_open_route_api_request()
+    {
+        /* SETUP */
+        $plugins = [
+            new PluginData(
+                id: 'file-parser',
+                pdf: [
+                    'engine' => 'pdf-text',
+                ],
+            ),
+        ];
+        $fileContentData = new FileContentData(
+            type: FileContentData::ALLOWED_TYPE,
+            file: new FileUrlData(
+                file_data: 'https://arxiv.org/pdf/1706.03762',
+                filename: 'document.pdf',
+            ),
+        );
+        $textContentData = new TextContentData(
+            type: TextContentData::ALLOWED_TYPE,
+            text: 'Please summarize this document.',
+        );
+        $messageData = new MessageData(
+            content: [
+                $textContentData,
+                $fileContentData,
+            ],
+            role: RoleType::USER,
+        );
+        $chatData = new ChatData(
+            messages: [$messageData],
+            model: $this->model,
+            plugins: $plugins,
+        );
+        $this->mockOpenRouter($this->mockBasicBody());
+
+        /* EXECUTE */
+        $response = LaravelOpenRouter::chatRequest($chatData);
+
+        /* ASSERT */
+        $this->generalTestAssertions($response);
+        $this->assertEquals(RoleType::ASSISTANT, Arr::get($response->choices[0], 'message.role'));
+        $this->assertNotNull(Arr::get($response->choices[0], 'message.content'));
+    }
+
+    #[Test]
+    public function it_sends_image_aspect_ratio_for_image_generation_in_the_open_route_api_request()
+    {
+        /* SETUP */
+        $chatData = new ChatData(
+            messages: [
+                new MessageData(
+                    content: 'Generate a beautiful sunset over mountains',
+                    role: RoleType::USER,
+                )
+            ],
+            model: 'google/gemini-2.5-flash-image-preview',
+            modalities: ['image', 'text'],
+            image_config: new ImageConfigData(
+                aspect_ratio: '16:9'
+            )
+        );
+        $mockBody = $this->mockBasicBody();
+        $mockBody['choices'][0]['message']['images'] = [
+            [
+                'image_url' => [
+                    'url' => 'https://example.com/generated-image-1.jpg'
+                ]
+            ],
+        ];
+        $this->mockOpenRouter($mockBody);
+
+        /* EXECUTE */
+        $response = $this->api->chatRequest($chatData);
+
+        /* ASSERT */
+        $this->generalTestAssertions($response);
+        $this->assertNotNull(Arr::get($response->choices[0], 'message.images'));
+        $images = Arr::get($response->choices[0], 'message.images');
+        $this->assertIsArray($images);
+        $this->assertNotEmpty($images);
+    }
+
+    // test for the audio content
+    #[Test]
+    public function it_successfully_sends_audio_in_content_in_messages_in_the_open_route_api_request()
+    {
+        /* SETUP */
+        $data = base64_encode('fake-audio-data'); // Simulated base64 audio data
+        $audioContentData = new AudioContentData(
+            type: AudioContentData::ALLOWED_TYPE, // it can only take input_audio for audio content
+            input_audio: new InputAudioData(
+                data: $data,
+                format: AudioFormatType::MP3,
+            ),
+        );
+        $messageData = new MessageData(
+            content: [
+                $audioContentData,
+            ],
+            role: RoleType::USER,
+        );
+        $chatData = new ChatData(
+            messages: [
+                $messageData,
+            ],
+            model: $this->model,
+            max_tokens: $this->maxTokens,
+        );
+        $this->mockOpenRouter($this->mockBasicBody());
+
+        /* EXECUTE */
+        $response = $this->api->chatRequest($chatData);
+
+        /* ASSERT */
+        $this->generalTestAssertions($response);
+        $this->assertEquals(RoleType::ASSISTANT, Arr::get($response->choices[0], 'message.role'));
+        $this->assertNotNull(Arr::get($response->choices[0], 'message.content'));
+    }
+
+    #[Test]
     public function it_successfully_sends_multiple_text_content_in_messages_in_the_open_route_api_request()
     {
         /* SETUP */
@@ -556,6 +908,19 @@ class OpenRouterAPITest extends TestCase
                 'completion_tokens' => 100,
                 'total_tokens' => 123,
                 'cost' => 0.00000114,
+                'prompt_tokens_details' => [
+                    'cached_tokens' => 10,
+                    'cache_write_tokens' => 15,
+                    'audio_tokens' => 0,
+                    'video_tokens' => 0,
+                ],
+                'completion_tokens_details' => [
+                    'reasoning_tokens' => 30,
+                    'audio_tokens' => 0,
+                    'image_tokens' => 0,
+                    'accepted_prediction_tokens' => 90,
+                    'rejected_prediction_tokens' => 0,
+                ],
             ],
         ];
         $provider = new ProviderPreferencesData(
@@ -900,6 +1265,125 @@ class OpenRouterAPITest extends TestCase
     }
 
     #[Test]
+    public function it_makes_chat_completion_with_tool_definition()
+    {
+        /* SETUP */
+        $tools = [
+            new ToolCallData(
+                type: 'function',
+                function: new FunctionData(
+                    name: 'getWeather',
+                    description: 'Get the current weather for a location',
+                    parameters: [
+                        'type' => 'object',
+                        'properties' => [
+                            'location' => [
+                                'type' => 'string',
+                                'description' => 'The city name',
+                            ],
+                        ],
+                        'required' => ['location'],
+                    ],
+                ),
+            ),
+        ];
+        $chatData = new ChatData(
+            messages: [
+                new MessageData(
+                    content: 'What is the weather like in Tokyo?',
+                    role: RoleType::USER,
+                ),
+            ],
+            model: 'mistralai/devstral-2512:free',
+            max_tokens: $this->maxTokens,
+            tool_choice: ToolChoiceType::AUTO,
+            tools: $tools,
+        );
+        $mockBody = $this->mockBasicBody();
+        $mockBody['choices'][0]['message']['content'] = null;
+        $mockBody['choices'][0]['message']['tool_calls'] = [
+            [
+                'id' => 'call_7F3kP9',
+                'type' => 'function',
+                'function' => [
+                    'name' => 'getWeather',
+                    'arguments' => '{"location": "Tokyo"}',
+                ],
+            ],
+        ];
+        $mockBody['choices'][0]['finish_reason'] = 'tool_calls';
+        $this->mockOpenRouter($mockBody);
+
+        /* EXECUTE */
+        $response = $this->api->chatRequest($chatData);
+
+        /* ASSERT */
+        $this->generalTestAssertions($response);
+        $this->assertEquals(RoleType::ASSISTANT, Arr::get($response->choices[0], 'message.role'));
+        $this->assertNotNull(Arr::get($response->choices[0], 'message.tool_calls'));
+        $this->assertEquals('getWeather', Arr::get($response->choices[0], 'message.tool_calls.0.function.name'));
+        $this->assertEquals('{"location": "Tokyo"}', Arr::get($response->choices[0], 'message.tool_calls.0.function.arguments'));
+        $this->assertEquals('call_7F3kP9', Arr::get($response->choices[0], 'message.tool_calls.0.id'));
+        $this->assertEquals('tool_calls', Arr::get($response->choices[0], 'finish_reason'));
+    }
+
+    #[Test]
+    public function it_sends_tool_result_back_to_llm_and_gets_final_response()
+    {
+        /* SETUP */
+        $toolCallId = 'call_7F3kP9';
+        $userMessage = new MessageData(
+            content: 'What is the weather like in Tokyo?',
+            role: RoleType::USER,
+        );
+        $assistantToolCallMessage = new MessageData(
+            role: RoleType::ASSISTANT,
+            tool_calls: [
+                new ToolCallData(
+                    id: $toolCallId,
+                    type: 'function',
+                    function: new FunctionData(
+                        name: 'getWeather',
+                        arguments: '{"location": "Tokyo"}',
+                        description: 'Get weather',
+                        parameters: [],
+                    ),
+                ),
+            ],
+        );
+        $toolResponseMessage = new MessageData(
+            content: json_encode([
+                'temperature' => '22°C',
+                'condition' => 'Sunny',
+            ]),
+            role: RoleType::TOOL,
+            tool_call_id: $toolCallId,
+        );
+        $chatData = new ChatData(
+            messages: [
+                $userMessage,
+                $assistantToolCallMessage,
+                $toolResponseMessage,
+            ],
+            model: $this->model,
+            max_tokens: $this->maxTokens,
+        );
+        $mockBody = $this->mockBasicBody();
+        $mockBody['choices'][0]['message']['content'] = 'The weather in Tokyo is currently 22°C and Sunny.';
+        $this->mockOpenRouter($mockBody);
+
+        /* EXECUTE */
+        $response = $this->api->chatRequest($chatData);
+
+        /* ASSERT */
+        $this->generalTestAssertions($response);
+        $this->assertEquals(RoleType::ASSISTANT, Arr::get($response->choices[0], 'message.role'));
+        $this->assertNotNull(Arr::get($response->choices[0], 'message.content'));
+        $this->assertStringContainsString('22°C', Arr::get($response->choices[0], 'message.content'));
+        $this->assertStringContainsString('Sunny', Arr::get($response->choices[0], 'message.content'));
+    }
+
+    #[Test]
     public function it_throws_validation_exception_when_NOT_ALLOWED_value_is_sent_for_tool_choice()
     {
         /* SETUP */
@@ -978,5 +1462,253 @@ class OpenRouterAPITest extends TestCase
 
         /* ASSERT */
         $this->generalTestAssertions($response);
+    }
+
+    #[Test]
+    public function it_returns_error_data_when_response_is_null()
+    {
+        /* SETUP */
+        $chatData = new ChatData(
+            messages: [
+                $this->messageData,
+            ],
+            model: $this->model,
+            max_tokens: $this->maxTokens,
+        );
+        $mockResponse = new Response(200, [], '');
+        $this->mock(ClientInterface::class, function (MockInterface $mock) use ($mockResponse) {
+            $mock->shouldReceive('request')
+                ->once()
+                ->andReturn($mockResponse);
+        });
+
+        /* EXECUTE */
+        $response = $this->api->chatRequest($chatData);
+
+        /* ASSERT */
+        $this->assertInstanceOf(ErrorData::class, $response);
+        $this->assertEquals(500, $response->code);
+        $this->assertEquals('Empty response from OpenRouter API.', $response->message);
+    }
+
+    #[Test]
+    public function it_returns_error_data_when_api_returns_error_response()
+    {
+        /* SETUP */
+        $chatData = new ChatData(
+            messages: [
+                $this->messageData,
+            ],
+            model: $this->model,
+            max_tokens: $this->maxTokens,
+        );
+        $errorBody = [
+            'error' => [
+                'message' => 'Provider returned error',
+                'code' => 502,
+                'metadata' => [
+                    'raw' => '{"id": "oTAvmmE-37", "error": {"message": "Internal server error", "type": "server_error"}}',
+                    'provider_name' => 'Together',
+                ],
+            ],
+            'user_id' => 'user_32kXS7KA',
+        ];
+        $this->mockOpenRouter($errorBody);
+
+        /* EXECUTE */
+        $response = $this->api->chatRequest($chatData);
+
+        /* ASSERT */
+        $this->assertInstanceOf(ErrorData::class, $response);
+        $this->assertEquals(502, $response->code);
+        $this->assertEquals('Provider returned error', $response->message);
+        $this->assertNotNull($response->metadata);
+        $this->assertIsArray($response->metadata);
+        $this->assertArrayHasKey('provider_name', $response->metadata);
+        $this->assertEquals('Together', $response->metadata['provider_name']);
+        $this->assertArrayHasKey('raw', $response->metadata);
+    }
+
+    #[Test]
+    public function it_creates_provider_preferences_with_all_extended_parameters()
+    {
+        /* SETUP */
+        $provider = new ProviderPreferencesData(
+            allow_fallbacks: true,
+            require_parameters: true,
+            data_collection: DataCollectionType::DENY,
+            order: ['openai', 'anthropic'],
+            zdr: true,
+            enforce_distillable_text: false,
+            only: ['openai'],
+            ignore: ['anthropic'],
+            quantizations: [QuantizationType::FP16, QuantizationType::BF16],
+            sort: ProviderSortType::PRICE,
+            preferred_min_throughput: 100.0,
+            preferred_max_latency: 2.5,
+            max_price: new MaxPriceData(
+                prompt: 0.001,
+                completion: 0.002,
+            ),
+        );
+
+        /* ASSERT */
+        $array = $provider->convertToArray();
+        $this->assertTrue($array['allow_fallbacks']);
+        $this->assertTrue($array['require_parameters']);
+        $this->assertEquals('deny', $array['data_collection']);
+        $this->assertEquals(['openai', 'anthropic'], $array['order']);
+        $this->assertTrue($array['zdr']);
+        $this->assertFalse($array['enforce_distillable_text']);
+        $this->assertEquals(['openai'], $array['only']);
+        $this->assertEquals(['anthropic'], $array['ignore']);
+        $this->assertEquals([QuantizationType::FP16, QuantizationType::BF16], $array['quantizations']);
+        $this->assertEquals('price', $array['sort']);
+        $this->assertEquals(100.0, $array['preferred_min_throughput']);
+        $this->assertEquals(2.5, $array['preferred_max_latency']);
+        $this->assertEquals(['prompt' => 0.001, 'completion' => 0.002], $array['max_price']);
+    }
+
+    #[Test]
+    public function it_creates_provider_preferences_with_sort_object()
+    {
+        /* SETUP */
+        $provider = new ProviderPreferencesData(
+            sort: new ProviderSortData(
+                by: ProviderSortType::THROUGHPUT,
+                partition: true,
+            ),
+        );
+
+        /* ASSERT */
+        $array = $provider->convertToArray();
+        $this->assertEquals(['by' => 'throughput', 'partition' => true], $array['sort']);
+    }
+
+    #[Test]
+    public function it_creates_provider_preferences_with_percentile_throughput_and_latency()
+    {
+        /* SETUP */
+        $provider = new ProviderPreferencesData(
+            preferred_min_throughput: new PercentileData(
+                p50: 100.0,
+                p90: 50.0,
+            ),
+            preferred_max_latency: new PercentileData(
+                p50: 1.0,
+                p75: 2.0,
+                p90: 3.0,
+                p99: 5.0,
+            ),
+        );
+
+        /* ASSERT */
+        $array = $provider->convertToArray();
+        $this->assertEquals(['p50' => 100.0, 'p90' => 50.0], $array['preferred_min_throughput']);
+        $this->assertEquals(['p50' => 1.0, 'p75' => 2.0, 'p90' => 3.0, 'p99' => 5.0], $array['preferred_max_latency']);
+    }
+
+    #[Test]
+    public function it_creates_max_price_data_and_filters_null_values()
+    {
+        /* SETUP */
+        $maxPrice = new MaxPriceData(
+            prompt: 0.001,
+            image: 0.05,
+        );
+
+        /* ASSERT */
+        $array = $maxPrice->convertToArray();
+        $this->assertEquals(0.001, $array['prompt']);
+        $this->assertEquals(0.05, $array['image']);
+        $this->assertArrayNotHasKey('completion', $array);
+        $this->assertArrayNotHasKey('request', $array);
+    }
+
+    #[Test]
+    public function it_throws_validation_exception_when_NOT_ALLOWED_value_is_sent_for_sort()
+    {
+        /* SETUP */
+        $this->expectException(OpenRouterValidationException::class);
+
+        /* EXECUTE */
+        new ProviderPreferencesData(
+            sort: 'invalid_sort_value',
+        );
+    }
+
+    #[Test]
+    public function it_throws_validation_exception_when_NOT_ALLOWED_value_is_sent_for_data_collection()
+    {
+        /* SETUP */
+        $this->expectException(OpenRouterValidationException::class);
+
+        /* EXECUTE */
+        new ProviderPreferencesData(
+            data_collection: 'invalid_value',
+        );
+    }
+
+    #[Test]
+    public function it_makes_chat_completion_with_extended_provider_preferences()
+    {
+        /* SETUP */
+        $provider = new ProviderPreferencesData(
+            allow_fallbacks: true,
+            require_parameters: true,
+            data_collection: DataCollectionType::ALLOW,
+            ignore: ['anthropic'],
+            quantizations: [QuantizationType::FP16],
+            sort: ProviderSortType::PRICE,
+            preferred_max_latency: 5.0,
+            max_price: new MaxPriceData(
+                prompt: 0.001,
+                completion: 0.002,
+            ),
+        );
+        $chatData = new ChatData(
+            messages: [
+                $this->messageData,
+            ],
+            model: $this->model,
+            max_tokens: $this->maxTokens,
+            provider: $provider,
+        );
+        $this->mockOpenRouter($this->mockBasicBody());
+
+        /* EXECUTE */
+        $response = $this->api->chatRequest($chatData);
+
+        /* ASSERT */
+        $this->generalTestAssertions($response);
+        $this->assertEquals(RoleType::ASSISTANT, Arr::get($response->choices[0], 'message.role'));
+        $this->assertNotNull(Arr::get($response->choices[0], 'message.content'));
+    }
+
+    #[Test]
+    public function it_filters_null_values_in_provider_preferences_convert_to_array()
+    {
+        /* SETUP */
+        $provider = new ProviderPreferencesData(
+            allow_fallbacks: true,
+            zdr: true,
+        );
+
+        /* ASSERT */
+        $array = $provider->convertToArray();
+        $this->assertCount(2, $array);
+        $this->assertArrayHasKey('allow_fallbacks', $array);
+        $this->assertArrayHasKey('zdr', $array);
+        $this->assertArrayNotHasKey('require_parameters', $array);
+        $this->assertArrayNotHasKey('data_collection', $array);
+        $this->assertArrayNotHasKey('order', $array);
+        $this->assertArrayNotHasKey('ignore', $array);
+        $this->assertArrayNotHasKey('only', $array);
+        $this->assertArrayNotHasKey('enforce_distillable_text', $array);
+        $this->assertArrayNotHasKey('quantizations', $array);
+        $this->assertArrayNotHasKey('sort', $array);
+        $this->assertArrayNotHasKey('preferred_min_throughput', $array);
+        $this->assertArrayNotHasKey('preferred_max_latency', $array);
+        $this->assertArrayNotHasKey('max_price', $array);
     }
 }
