@@ -163,7 +163,7 @@ final class ChatData extends DataTransferObject
          * @var bool|null
          * @deprecated Use '$reasoning' parameter instead (it is backward compatible with the old parameter).
          */
-        public ?bool $include_reasoning = false,
+        public ?bool $include_reasoning = null,
 
         /**
          * A stable identifier for your end-users. Used to help detect and prevent abuse.

@@ -42,7 +42,7 @@ final class ReasoningData extends DataTransferObject
          *
          * @var bool|null
          */
-        public ?bool $exclude = false,
+        public ?bool $exclude = null,
 
         /**
          * Enable reasoning with the default parameters.
