@@ -212,6 +212,14 @@ final class ChatData extends DataTransferObject
          * @var string|null
          */
         public ?string $prompt_cache_retention = null,
+
+        /**
+         * Top-level cache control for automatic prompt caching (e.g. Anthropic).
+         * Example: ['type' => 'ephemeral'] or ['type' => 'ephemeral', 'ttl' => '1h']
+         *
+         * @var array|null
+         */
+        public ?array $cache_control = null,
     ) {
         $this->validateXorFields($this->messages, $this->prompt);
         $this->validateXorFields($this->model, $this->models);
@@ -310,6 +318,7 @@ final class ChatData extends DataTransferObject
                 'reasoning'              => $this->reasoning?->convertToArray() ?? ['enabled' => false],
                 'prompt_cache_key'       => $this->prompt_cache_key,
                 'prompt_cache_retention' => $this->prompt_cache_retention,
+                'cache_control'          => $this->cache_control,
             ],
             fn($value) => $value !== null
         );
