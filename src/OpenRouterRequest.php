@@ -80,6 +80,16 @@ final class OpenRouterRequest extends OpenRouterAPI
             );
         }
 
+        // Mid-generation provider errors arrive as HTTP 200 with the error inside the choice
+        // (finish_reason "error" and partial content), see https://openrouter.ai/docs/api-reference/errors
+        if (Arr::get($decoded, 'choices.0.error')) {
+            return new ErrorData(
+                code: (int) Arr::get($decoded, 'choices.0.error.code', 500),
+                message: Arr::get($decoded, 'choices.0.error.message', 'Provider error during generation.'),
+                metadata: Arr::get($decoded, 'choices.0.error.metadata'),
+            );
+        }
+
         return $this->openRouterHelper->formChatResponse($decoded);
     }
 
