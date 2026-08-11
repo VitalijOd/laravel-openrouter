@@ -102,11 +102,11 @@ final class OpenRouterServiceProvider extends ServiceProvider
      */
     private function configureClient(): Client
     {
-        // Set the default configuration for retrying requests
+        // Set the default configuration for retrying requests.
         $retryOptions = [
-            'max_retry_attempts' => 5,
+            'max_retry_attempts' => config('laravel-openrouter.retry_max_attempts', 2),
             'retry_on_status'    => [429, 500, 502, 503, 504],
-            'retry_on_timeout'   => true,
+            'retry_on_timeout'   => config('laravel-openrouter.retry_on_timeout', false),
         ];
 
         // Create a handler stack with the retry middleware.
