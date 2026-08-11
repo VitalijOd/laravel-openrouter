@@ -37,6 +37,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | OpenRouter Retries
+    |--------------------------------------------------------------------------
+    |
+    | Max retry attempts for failed requests (429, 500, 502, 503, 504).
+    | Timeouts are not retried by default: a timed-out request means the model
+    | is slow, so a silent retry would only multiply the wait for the caller.
+    |
+    */
+    'retry_max_attempts' => env('OPENROUTER_RETRY_MAX_ATTEMPTS', 2),
+    'retry_on_timeout' => env('OPENROUTER_RETRY_ON_TIMEOUT', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | OpenRouter Title
     |--------------------------------------------------------------------------
     |
