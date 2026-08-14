@@ -15,7 +15,7 @@ use MoeMizrak\LaravelOpenrouter\DTO\ResponseData;
 /**
  * Facade for LaravelOpenRouter.
  *
- * @method static ErrorData|ResponseData chatRequest(ChatData $chatData) Sends a chat request to the OpenRouter API and returns the response data.
+ * @method static ErrorData|ResponseData chatRequest(ChatData $chatData, ?int $timeout = null) Sends a chat request to the OpenRouter API and returns the response data.
  * @method static PromiseInterface chatStreamRequest(ChatData $chatData) Sends a chat stream request to the OpenRouter API and returns the raw streaming response.
  * @method static array filterStreamingResponse(string $streamingResponse) It filters streaming response string so that response string is mapped into ResponseData.
  * @method static CostResponseData costRequest(string $generationId) Sends a cost request to the OpenRouter API with the given generation ID and returns the cost response data.
