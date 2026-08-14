@@ -7,6 +7,7 @@ namespace MoeMizrak\LaravelOpenrouter;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Promise\PromiseInterface;
+use GuzzleHttp\RequestOptions;
 use Illuminate\Support\Arr;
 use MoeMizrak\LaravelOpenrouter\DTO\ChatData;
 use MoeMizrak\LaravelOpenrouter\DTO\CostResponseData;
@@ -30,11 +31,12 @@ final class OpenRouterRequest extends OpenRouterAPI
      * Sends a model request for the given chat conversation.
      *
      * @param ChatData $chatData
+     * @param int|null $timeout - Per-request timeout in seconds, overrides the client-level default.
      *
      * @return ErrorData|ResponseData
      * @throws ReflectionException|GuzzleException
      */
-    public function chatRequest(ChatData $chatData): ErrorData|ResponseData
+    public function chatRequest(ChatData $chatData, ?int $timeout = null): ErrorData|ResponseData
     {
         // The path for the chat completion request.
         $chatCompletionPath = 'chat/completions';
@@ -54,6 +56,11 @@ final class OpenRouterRequest extends OpenRouterAPI
         $options = [
             'json' => $chatData,
         ];
+
+        // Per-request timeout overrides the client-level default.
+        if ($timeout !== null) {
+            $options[RequestOptions::TIMEOUT] = $timeout;
+        }
 
         // Send POST request to the OpenRouter API chat completion endpoint and get the response.
         $response = app(ClientInterface::class)->request(
